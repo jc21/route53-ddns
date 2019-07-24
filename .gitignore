@@ -1,0 +1,6 @@
+.idea
+.DS_Store
+._*
+*.swp
+route53-ddns
+*.code-workspace
