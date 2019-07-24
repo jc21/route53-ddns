@@ -13,46 +13,21 @@ import (
 	"github.com/JeremyLoy/config"
 	"github.com/alexflint/go-arg"
 	"github.com/jc21/route53-ddns/pkg/logger"
+	"github.com/jc21/route53-ddns/pkg/model"
 )
 
 // Populated at build time using ldflags
-var gitCommit string
-var appVersion string
+var appArguments model.ArgConfig
 
 const defaultConfigFile = "~/.aws/route53-ddns.json"
+const defaultStateFile = "~/.aws/route53-ddns-state.json"
 
-// AppConfig is data used for displaying command usage and specifying configuration options
-type AppConfig struct {
-	Setup      bool   `arg:"-s" help:"Setup wizard"`
-	ConfigFile string `arg:"-c" help:"Config File to use (default: ~/.aws/route53-ddns.json)"`
-}
+// GetConfig returns the ArgConfig
+func GetConfig() model.ArgConfig {
+	config.FromEnv().To(&appArguments)
+	arg.MustParse(&appArguments)
 
-// AWSConfig is the settings that are saved for use in updating
-type AWSConfig struct {
-	AWSKeyID     string `survey:"aws_key_id"`
-	AWSKeySecret string `survey:"aws_key_secret"`
-	ZoneID       string `survey:"zone_id"`
-	Recordset    string `survey:"recordset"`
-}
-
-// Version returns the build version and git commit
-func (AppConfig) Version() string {
-	return "v" + appVersion + " (" + gitCommit + ")"
-}
-
-// Description returns a simple description of the command
-func (AppConfig) Description() string {
-	return "Update route53 DNS record with your current IP address"
-}
-
-// GetConfig returns the AppConfig
-func GetConfig() AppConfig {
-	var AppArguments AppConfig
-
-	config.FromEnv().To(&AppArguments)
-	arg.MustParse(&AppArguments)
-
-	return AppArguments
+	return appArguments
 }
 
 // SetupAWSConfig will ask for setup questions
@@ -81,24 +56,23 @@ func SetupAWSConfig() {
 		},
 	}
 	// perform the questions
-	var answers AWSConfig
+	var answers model.AWSConfig
 	err := survey.Ask(questions, &answers)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
 
-	logger := logger.Get()
 	logger.Trace("Answers: %+v", answers)
 
-	success := writeAwsConfig(answers)
-	if !success {
+	writeErr := answers.Write(getAwsConfigFilename())
+	if writeErr != nil {
+		logger.Error("Could not write configuration: %v", err.Error())
 		os.Exit(1)
 	}
 }
 
-func writeAwsConfig(awsConfig AWSConfig) bool {
-	logger := logger.Get()
+func writeAwsConfig(awsConfig model.AWSConfig) bool {
 	filename := getAwsConfigFilename()
 	content, _ := json.MarshalIndent(awsConfig, "", " ")
 
@@ -123,32 +97,39 @@ func writeAwsConfig(awsConfig AWSConfig) bool {
 }
 
 func getAwsConfigFilename() string {
-	var filename string
-	logger := logger.Get()
+	argConfig := GetConfig()
+	if argConfig.ConfigFile != "" {
+		return argConfig.ConfigFile
+	}
 
+	return getFullFilename(defaultConfigFile)
+}
+
+func getRoute53StateFilename() string {
+	argConfig := GetConfig()
+	if argConfig.StateFile != "" {
+		return argConfig.StateFile
+	}
+
+	return getFullFilename(defaultStateFile)
+}
+
+func getFullFilename(filename string) string {
 	usr, err := user.Current()
 	if err != nil {
 		logger.Error(err.Error())
 	}
 
-	appConfig := GetConfig()
-	if appConfig.ConfigFile != "" {
-		filename = appConfig.ConfigFile
-	} else {
-		var strs []string
-		strs = append(strs, usr.HomeDir)
-		strs = append(strs, "/")
+	var strs []string
+	strs = append(strs, usr.HomeDir)
+	strs = append(strs, "/")
 
-		filename = strings.ReplaceAll(defaultConfigFile, "~/", strings.Join(strs, ""))
-	}
-
-	return filename
+	return strings.ReplaceAll(filename, "~/", strings.Join(strs, ""))
 }
 
 // GetAWSConfig returns the configuration as read from a file
-func GetAWSConfig() AWSConfig {
-	var awsConfig AWSConfig
-	logger := logger.Get()
+func GetAWSConfig() model.AWSConfig {
+	var awsConfig model.AWSConfig
 	filename := getAwsConfigFilename()
 
 	// Make sure file exists
@@ -159,7 +140,6 @@ func GetAWSConfig() AWSConfig {
 
 	jsonFile, err := os.Open(filename)
 	if err != nil {
-		fmt.Println(err)
 		logger.Error("Configuration could not be opened: %v", err.Error())
 		os.Exit(1)
 	}
@@ -179,4 +159,21 @@ func GetAWSConfig() AWSConfig {
 	}
 
 	return awsConfig
+}
+
+// GetRoute53State returns the configuration as read from a file
+func GetRoute53State() model.Route53State {
+	var state model.Route53State
+	filename := getRoute53StateFilename()
+
+	jsonFile, err := os.Open(filename)
+	if err == nil {
+		defer jsonFile.Close()
+		contents, readErr := ioutil.ReadAll(jsonFile)
+		if readErr == nil {
+			json.Unmarshal(contents, &state)
+		}
+	}
+
+	return state
 }
