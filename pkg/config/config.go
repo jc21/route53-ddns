@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path"
-	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/JeremyLoy/config"
 	"github.com/alexflint/go-arg"
+	"github.com/jc21/route53-ddns/pkg/helper"
 	"github.com/jc21/route53-ddns/pkg/logger"
 	"github.com/jc21/route53-ddns/pkg/model"
 )
@@ -20,7 +19,6 @@ import (
 var appArguments model.ArgConfig
 
 const defaultConfigFile = "~/.aws/route53-ddns.json"
-const defaultStateFile = "~/.aws/route53-ddns-state.json"
 
 // GetConfig returns the ArgConfig
 func GetConfig() model.ArgConfig {
@@ -102,29 +100,7 @@ func getAwsConfigFilename() string {
 		return argConfig.ConfigFile
 	}
 
-	return getFullFilename(defaultConfigFile)
-}
-
-func getRoute53StateFilename() string {
-	argConfig := GetConfig()
-	if argConfig.StateFile != "" {
-		return argConfig.StateFile
-	}
-
-	return getFullFilename(defaultStateFile)
-}
-
-func getFullFilename(filename string) string {
-	usr, err := user.Current()
-	if err != nil {
-		logger.Error(err.Error())
-	}
-
-	var strs []string
-	strs = append(strs, usr.HomeDir)
-	strs = append(strs, "/")
-
-	return strings.ReplaceAll(filename, "~/", strings.Join(strs, ""))
+	return helper.GetFullFilename(defaultConfigFile)
 }
 
 // GetAWSConfig returns the configuration as read from a file
@@ -159,21 +135,4 @@ func GetAWSConfig() model.AWSConfig {
 	}
 
 	return awsConfig
-}
-
-// GetRoute53State returns the configuration as read from a file
-func GetRoute53State() model.Route53State {
-	var state model.Route53State
-	filename := getRoute53StateFilename()
-
-	jsonFile, err := os.Open(filename)
-	if err == nil {
-		defer jsonFile.Close()
-		contents, readErr := ioutil.ReadAll(jsonFile)
-		if readErr == nil {
-			json.Unmarshal(contents, &state)
-		}
-	}
-
-	return state
 }

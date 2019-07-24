@@ -1,19 +1,23 @@
 package updater
 
 import (
-	"fmt"
+	"encoding/json"
+	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 	externalip "github.com/glendc/go-external-ip"
-	ddnsaws "github.com/jc21/route53-ddns/pkg/aws"
-	"github.com/jc21/route53-ddns/pkg/config"
+	"github.com/jc21/route53-ddns/pkg/helper"
 	"github.com/jc21/route53-ddns/pkg/logger"
 	"github.com/jc21/route53-ddns/pkg/model"
 )
+
+const defaultStateFile = "~/.aws/route53-ddns-state.json"
 
 // Process will update the ip address with route53, if forced or changed
 func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
@@ -26,7 +30,7 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 	}
 
 	// Determine if we need to update it
-	state := config.GetRoute53State()
+	state := GetRoute53State(argConfig)
 	logger.Trace("STATE: %+v", state)
 
 	if argConfig.Force || awsConfig.ZoneID != state.ZoneID || awsConfig.Recordset != state.Recordset {
@@ -36,6 +40,15 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 		updateErr := updateIP(awsConfig, ip.String())
 		if updateErr != nil {
 			logger.Error("Could not update Route53: %v", updateErr.Error())
+		} else {
+			logger.Info("IP has been updated to %v for %v", ip.String(), awsConfig.Recordset)
+
+			// Save state
+			state.ZoneID = awsConfig.ZoneID
+			state.Recordset = awsConfig.Recordset
+			state.LastIP = ip.String()
+			state.LastUpdateTime = time.Now()
+			state.Write(getRoute53StateFilename(argConfig))
 		}
 
 	} else {
@@ -44,18 +57,22 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 }
 
 func updateIP(awsConfig model.AWSConfig, ip string) error {
-	creds := credentials.NewCredentials(&ddns.MyProvider{})
-	credValue, err := creds.Get()
+	session, sessionErr := session.NewSession(&aws.Config{
+		Credentials: credentials.NewStaticCredentials(awsConfig.AWSKeyID, awsConfig.AWSKeySecret, ""),
+	})
 
-	sess := session.Must(session.NewSession())
-	svc := route53.New(sess)
+	if sessionErr != nil {
+		return sessionErr
+	}
+
+	svc := route53.New(session)
 
 	// Create a message
 	input := &route53.ChangeResourceRecordSetsInput{
 		ChangeBatch: &route53.ChangeBatch{
 			Changes: []*route53.Change{
 				{
-					Action: aws.String("CREATE"),
+					Action: aws.String("UPSERT"),
 					ResourceRecordSet: &route53.ResourceRecordSet{
 						Name: aws.String(awsConfig.Recordset),
 						ResourceRecords: []*route53.ResourceRecord{
@@ -77,20 +94,7 @@ func updateIP(awsConfig model.AWSConfig, ip string) error {
 	result, err := svc.ChangeResourceRecordSets(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case route53.ErrCodeNoSuchHostedZone:
-				fmt.Println(route53.ErrCodeNoSuchHostedZone, aerr.Error())
-			case route53.ErrCodeNoSuchHealthCheck:
-				fmt.Println(route53.ErrCodeNoSuchHealthCheck, aerr.Error())
-			case route53.ErrCodeInvalidChangeBatch:
-				fmt.Println(route53.ErrCodeInvalidChangeBatch, aerr.Error())
-			case route53.ErrCodeInvalidInput:
-				fmt.Println(route53.ErrCodeInvalidInput, aerr.Error())
-			case route53.ErrCodePriorRequestNotComplete:
-				fmt.Println(route53.ErrCodePriorRequestNotComplete, aerr.Error())
-			default:
-				fmt.Println(aerr.Error())
-			}
+			return aerr
 		} else {
 			return err
 		}
@@ -99,4 +103,29 @@ func updateIP(awsConfig model.AWSConfig, ip string) error {
 	logger.Trace("AWS Result: %v", result)
 
 	return nil
+}
+
+func getRoute53StateFilename(argConfig model.ArgConfig) string {
+	if argConfig.StateFile != "" {
+		return argConfig.StateFile
+	}
+
+	return helper.GetFullFilename(defaultStateFile)
+}
+
+// GetRoute53State returns the configuration as read from a file
+func GetRoute53State(argConfig model.ArgConfig) model.Route53State {
+	var state model.Route53State
+	filename := getRoute53StateFilename(argConfig)
+
+	jsonFile, err := os.Open(filename)
+	if err == nil {
+		defer jsonFile.Close()
+		contents, readErr := ioutil.ReadAll(jsonFile)
+		if readErr == nil {
+			json.Unmarshal(contents, &state)
+		}
+	}
+
+	return state
 }
