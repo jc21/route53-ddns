@@ -52,7 +52,12 @@ func SetupAWSConfig() {
 			Prompt:   &survey.Input{Message: "Route53 Record Set:"},
 			Validate: survey.Required,
 		},
+		{
+			Name:   "pushover_user_token",
+			Prompt: &survey.Input{Message: "Pushover User Token: (leave blank to disable)"},
+		},
 	}
+
 	// perform the questions
 	var answers model.AWSConfig
 	err := survey.Ask(questions, &answers)

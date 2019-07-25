@@ -9,10 +9,11 @@ import (
 
 // AWSConfig is the settings that are saved for use in updating
 type AWSConfig struct {
-	AWSKeyID     string `survey:"aws_key_id"`
-	AWSKeySecret string `survey:"aws_key_secret"`
-	ZoneID       string `survey:"zone_id"`
-	Recordset    string `survey:"recordset"`
+	AWSKeyID          string `survey:"aws_key_id"`
+	AWSKeySecret      string `survey:"aws_key_secret"`
+	ZoneID            string `survey:"zone_id"`
+	Recordset         string `survey:"recordset"`
+	PushoverUserToken string `survey:"pushover_user_token"`
 }
 
 func (c *AWSConfig) Write(filename string) error {

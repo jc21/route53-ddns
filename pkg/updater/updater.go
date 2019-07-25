@@ -2,6 +2,7 @@ package updater
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 	externalip "github.com/glendc/go-external-ip"
+	"github.com/gregdel/pushover"
 	"github.com/jc21/route53-ddns/pkg/helper"
 	"github.com/jc21/route53-ddns/pkg/logger"
 	"github.com/jc21/route53-ddns/pkg/model"
@@ -49,6 +51,33 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 			state.LastIP = ip.String()
 			state.LastUpdateTime = time.Now()
 			state.Write(getRoute53StateFilename(argConfig))
+
+			if awsConfig.PushoverUserToken != "" {
+				pushoverApp := pushover.New("a4dhut1a7waegz6p2xh7enzegjedgo")
+				recipient := pushover.NewRecipient(awsConfig.PushoverUserToken)
+
+				message := &pushover.Message{
+					Message:    fmt.Sprintf("For %v", awsConfig.Recordset),
+					Title:      fmt.Sprintf("IP updated to %v", ip.String()),
+					Priority:   0,
+					URL:        "",
+					URLTitle:   "",
+					Timestamp:  time.Now().Unix(),
+					Retry:      60 * time.Second,
+					Expire:     time.Hour,
+					DeviceName: "",
+					Sound:      "",
+				}
+
+				// Send the message to the recipient
+				_, err := pushoverApp.SendMessage(message, recipient)
+				if err != nil {
+					logger.Error(err.Error())
+					os.Exit(1)
+				} else {
+					logger.Info("Pushover Notification Sent OK")
+				}
+			}
 		}
 
 	} else {
