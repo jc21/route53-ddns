@@ -10,9 +10,3 @@ all: build
 build:
 	GO111MODULE=on $(GOBUILD) -o bin/$(BINARY_NAME) ./cmd/route53-ddns/main.go
 
-clean:
-	$(GOCLEAN)
-	rm -f $(BINARY_NAME)
-
-deps:
-	$(GOGET)

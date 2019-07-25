@@ -35,7 +35,7 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 	state := GetRoute53State(argConfig)
 	logger.Trace("STATE: %+v", state)
 
-	if argConfig.Force || awsConfig.ZoneID != state.ZoneID || awsConfig.Recordset != state.Recordset {
+	if ip.String() != state.LastIP || argConfig.Force || awsConfig.ZoneID != state.ZoneID || awsConfig.Recordset != state.Recordset {
 		// Update the Route53 IP and save to new state
 		logger.Info("Updating IP to %v", ip.String())
 
