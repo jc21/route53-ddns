@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/JeremyLoy/config"
@@ -70,33 +69,9 @@ func SetupAWSConfig() {
 
 	writeErr := answers.Write(getAwsConfigFilename())
 	if writeErr != nil {
-		logger.Error("Could not write configuration: %v", err.Error())
+		logger.Error("Could not write configuration: %v", writeErr.Error())
 		os.Exit(1)
 	}
-}
-
-func writeAwsConfig(awsConfig model.AWSConfig) bool {
-	filename := getAwsConfigFilename()
-	content, _ := json.MarshalIndent(awsConfig, "", " ")
-
-	// Make sure the ".aws" folder exists
-	folder := path.Dir(filename)
-	dirErr := os.MkdirAll(folder, os.ModePerm)
-	if dirErr != nil {
-		logger.Error("Could not create folder: %v", dirErr.Error())
-		return false
-	}
-
-	logger.Trace("Writing config to: %+v", filename)
-
-	err := ioutil.WriteFile(filename, content, 0600)
-	if err != nil {
-		logger.Error("Could not save config: %v", err.Error())
-		return false
-	}
-
-	logger.Info("Wrote config to %v", filename)
-	return true
 }
 
 func getAwsConfigFilename() string {
