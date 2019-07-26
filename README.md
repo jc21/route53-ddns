@@ -18,17 +18,29 @@ Options:
   --version              display version and exit
 ```
 
-### Installing
+## Install
+
+#### Centos
+
+RPM hosted on [yum.jc21.com](https://yum.jc21.com)
+
+
+#### Debian/Ubuntu/Mint
+
+DEB host on [dpkg.jc21.com](https://dpk.jc21.com)
+
+
+#### Go Get
 
 ```bash
 go get github.com/jc21/route53-ddns
 ```
 
-or build with:
+
+#### Building
 
 ```bash
 git clone https://github.com/jc21/route53-ddns && cd route53-ddns
-make
+go build -o bin/route53-ddns cmd/route53-ddns/main.go
 ./bin/route53-ddns -h
 ```
-
