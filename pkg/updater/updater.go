@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -39,7 +40,13 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 		// Update the Route53 IP and save to new state
 		logger.Info("Updating IP to %v", ip.String())
 
-		updateErr := updateIP(awsConfig, ip.String())
+		// Determine if this is ipv4 or ipv6
+		recordType := "A"
+		if strings.Contains(ip.String(), ":") {
+			recordType = "AAAA"
+		}
+
+		updateErr := updateIP(awsConfig, ip.String(), recordType)
 		if updateErr != nil {
 			logger.Error("Could not update Route53: %v", updateErr.Error())
 		} else {
@@ -85,7 +92,7 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 	}
 }
 
-func updateIP(awsConfig model.AWSConfig, ip string) error {
+func updateIP(awsConfig model.AWSConfig, ip, recordType string) error {
 	session, sessionErr := session.NewSession(&aws.Config{
 		Credentials: credentials.NewStaticCredentials(awsConfig.AWSKeyID, awsConfig.AWSKeySecret, ""),
 	})
@@ -110,7 +117,7 @@ func updateIP(awsConfig model.AWSConfig, ip string) error {
 							},
 						},
 						TTL:  aws.Int64(60),
-						Type: aws.String("A"),
+						Type: aws.String(recordType),
 					},
 				},
 			},
