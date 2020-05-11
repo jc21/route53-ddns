@@ -52,6 +52,14 @@ func SetupAWSConfig() {
 			Validate: survey.Required,
 		},
 		{
+			Name:     "protocols",
+			Prompt:   &survey.Select{
+				Message: "Which IP Protocals do you update?",
+				Options: []string{"IPv4 Only", "IPv6 Only ", "Both"},
+			},
+			Validate: survey.Required,
+		},
+		{
 			Name:   "pushover_user_token",
 			Prompt: &survey.Input{Message: "Pushover User Token: (leave blank to disable)"},
 		},

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -13,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
-	externalip "github.com/glendc/go-external-ip"
+	externalip "github.com/jc21/go-external-ip"
 	"github.com/gregdel/pushover"
 	"github.com/jc21/route53-ddns/pkg/helper"
 	"github.com/jc21/route53-ddns/pkg/logger"
@@ -26,17 +27,64 @@ const defaultStateFile = "~/.aws/route53-ddns-state.json"
 func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 	// Determine the current public ip
 	consensus := externalip.DefaultConsensus(nil, nil)
-	ip, err := consensus.ExternalIP()
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-
-	// Determine if we need to update it
 	state := GetRoute53State(argConfig)
 	logger.Trace("STATE: %+v", state)
 
-	if ip.String() != state.LastIP || argConfig.Force || awsConfig.ZoneID != state.ZoneID || awsConfig.Recordset != state.Recordset {
+	// Apply state
+	state.ZoneID = awsConfig.ZoneID
+	state.Recordset = awsConfig.Recordset
+	state.LastUpdateTime = time.Now()
+
+	if awsConfig.ZoneID != state.ZoneID || awsConfig.Recordset != state.Recordset {
+		argConfig.Force = true
+	}
+
+	awsConfig.Protocols = strings.Trim(awsConfig.Protocols, " ")
+	changed := false
+	hasError := false
+
+	if awsConfig.Protocols == "IPv4 Only" || awsConfig.Protocols == "Both" || awsConfig.Protocols == "" {
+		// Determine IPv4
+		consensus.UseIPProtocol(4)
+		ipv4, errv4 := consensus.ExternalIP()
+		if errv4 == nil {
+			changed, errv4 = updateIPProtocol(ipv4, state.LastIPv4, argConfig, awsConfig)
+		}
+
+		if errv4 != nil {
+			logger.Error(errv4.Error())
+			hasError = true
+		} else if changed {
+			state.LastIPv4 = ipv4.String()
+			state.Write(getRoute53StateFilename(argConfig))
+		}
+	}
+
+	if awsConfig.Protocols == "IPv6 Only" || awsConfig.Protocols == "Both" {
+		// Determine IPv6
+		consensus.UseIPProtocol(6)
+		ipv6, errv6 := consensus.ExternalIP()
+		if errv6 == nil {
+			changed, errv6 = updateIPProtocol(ipv6, state.LastIPv6, argConfig, awsConfig)
+		}
+
+		if errv6 != nil {
+			logger.Error(errv6.Error())
+			hasError = true
+		} else if changed {
+			state.LastIPv6 = ipv6.String()
+			state.Write(getRoute53StateFilename(argConfig))
+		}
+	}
+
+	if hasError {
+		os.Exit(1)
+	}
+}
+
+// updateIPProtocol returns: changed, error
+func updateIPProtocol(ip net.IP, lastIP string, argConfig model.ArgConfig, awsConfig model.AWSConfig) (bool, error) {
+	if ip.String() != lastIP || argConfig.Force {
 		// Update the Route53 IP and save to new state
 		logger.Info("Updating IP to %v", ip.String())
 
@@ -49,15 +97,9 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 		updateErr := updateIP(awsConfig, ip.String(), recordType)
 		if updateErr != nil {
 			logger.Error("Could not update Route53: %v", updateErr.Error())
+			return false, updateErr
 		} else {
-			logger.Info("IP has been updated to %v for %v", ip.String(), awsConfig.Recordset)
-
-			// Save state
-			state.ZoneID = awsConfig.ZoneID
-			state.Recordset = awsConfig.Recordset
-			state.LastIP = ip.String()
-			state.LastUpdateTime = time.Now()
-			state.Write(getRoute53StateFilename(argConfig))
+			logger.Info("'%s' record has been updated to %v for %v", recordType, ip.String(), awsConfig.Recordset)
 
 			if awsConfig.PushoverUserToken != "" {
 				pushoverApp := pushover.New("a4dhut1a7waegz6p2xh7enzegjedgo")
@@ -80,16 +122,18 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 				_, err := pushoverApp.SendMessage(message, recipient)
 				if err != nil {
 					logger.Error(err.Error())
-					os.Exit(1)
 				} else {
 					logger.Info("Pushover Notification Sent OK")
 				}
 			}
-		}
 
+			return true, nil
+		}
 	} else {
 		logger.Info("IP %v hasn't changed, not updating Route53", ip.String())
 	}
+
+	return false, nil
 }
 
 func updateIP(awsConfig model.AWSConfig, ip, recordType string) error {

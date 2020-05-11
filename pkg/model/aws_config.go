@@ -13,6 +13,7 @@ type AWSConfig struct {
 	AWSKeySecret      string `survey:"aws_key_secret"`
 	ZoneID            string `survey:"zone_id"`
 	Recordset         string `survey:"recordset"`
+	Protocols         string `survey:"protocols"`
 	PushoverUserToken string `survey:"pushover_user_token"`
 }
 

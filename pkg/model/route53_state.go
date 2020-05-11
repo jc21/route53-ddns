@@ -12,7 +12,8 @@ import (
 type Route53State struct {
 	ZoneID         string    `survey:"zone_id"`
 	Recordset      string    `survey:"recordset"`
-	LastIP         string    `survey:"last_ip"`
+	LastIPv4       string    `survey:"last_ipv4"`
+	LastIPv6       string    `survey:"last_ipv6"`
 	LastUpdateTime time.Time `survey:"last_update_time"`
 }
 
