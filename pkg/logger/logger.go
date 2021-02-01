@@ -1,8 +1,8 @@
 package logger
 
 import (
-	"github.com/borderstech/logmatic"
 	"github.com/jc21/route53-ddns/pkg/model"
+	"github.com/mborders/logmatic"
 )
 
 var log *logmatic.Logger
