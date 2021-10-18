@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
-	externalip "github.com/jc21/go-external-ip"
+	externalip "github.com/glendc/go-external-ip"
 	"github.com/gregdel/pushover"
 	"github.com/jc21/route53-ddns/pkg/helper"
 	"github.com/jc21/route53-ddns/pkg/logger"
