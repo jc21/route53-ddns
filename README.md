@@ -20,22 +20,15 @@ Options:
 
 ## Install
 
-#### Centos
+#### RHEL based distributions
 
 RPM hosted on [yum.jc21.com](https://yum.jc21.com)
 
-
-#### Debian/Ubuntu/Mint
-
-DEB host on [dpkg.jc21.com](https://dpk.jc21.com)
-
-
-#### Go Get
+#### Go install
 
 ```bash
-go get github.com/jc21/route53-ddns
+go install github.com/jc21/route53-ddns@latest
 ```
-
 
 #### Building
 
