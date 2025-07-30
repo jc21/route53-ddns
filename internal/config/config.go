@@ -3,15 +3,16 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
+
+	"route53-ddns/internal/helper"
+	"route53-ddns/internal/logger"
+	"route53-ddns/internal/model"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/JeremyLoy/config"
 	"github.com/alexflint/go-arg"
-	"github.com/jc21/route53-ddns/pkg/helper"
-	"github.com/jc21/route53-ddns/pkg/logger"
-	"github.com/jc21/route53-ddns/pkg/model"
 )
 
 // Populated at build time using ldflags
@@ -21,6 +22,7 @@ const defaultConfigFile = "~/.aws/route53-ddns.json"
 
 // GetConfig returns the ArgConfig
 func GetConfig() model.ArgConfig {
+	// nolint: gosec, errcheck
 	config.FromEnv().To(&appArguments)
 	arg.MustParse(&appArguments)
 
@@ -52,8 +54,8 @@ func SetupAWSConfig() {
 			Validate: survey.Required,
 		},
 		{
-			Name:     "protocols",
-			Prompt:   &survey.Select{
+			Name: "protocols",
+			Prompt: &survey.Select{
 				Message: "Which IP Protocals do you update?",
 				Options: []string{"IPv4 Only", "IPv6 Only ", "Both"},
 			},
@@ -102,17 +104,20 @@ func GetAWSConfig() model.AWSConfig {
 		os.Exit(1)
 	}
 
+	// nolint: gosec
 	jsonFile, err := os.Open(filename)
 	if err != nil {
 		logger.Error("Configuration could not be opened: %v", err.Error())
 		os.Exit(1)
 	}
 
+	// nolint: gosec, errcheck
 	defer jsonFile.Close()
 
-	contents, readErr := ioutil.ReadAll(jsonFile)
+	contents, readErr := io.ReadAll(jsonFile)
 	if readErr != nil {
 		logger.Error("Configuration file could not be read: %v", readErr.Error())
+		// nolint: gocritic
 		os.Exit(1)
 	}
 

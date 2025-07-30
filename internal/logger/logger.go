@@ -1,7 +1,8 @@
 package logger
 
 import (
-	"github.com/jc21/route53-ddns/pkg/model"
+	"route53-ddns/internal/model"
+
 	"github.com/mborders/logmatic"
 )
 
@@ -26,42 +27,42 @@ func Init(argConfig model.ArgConfig) *logmatic.Logger {
 }
 
 // Trace logs a trace statement
-func Trace(format string, a ...interface{}) {
+func Trace(format string, a ...any) {
 	if log != nil {
 		log.Trace(format, a...)
 	}
 }
 
 // Debug logs a debug statement
-func Debug(format string, a ...interface{}) {
+func Debug(format string, a ...any) {
 	if log != nil {
 		log.Debug(format, a...)
 	}
 }
 
 // Info logs a info statement
-func Info(format string, a ...interface{}) {
+func Info(format string, a ...any) {
 	if log != nil {
 		log.Info(format, a...)
 	}
 }
 
 // Warn logs a warn statement
-func Warn(format string, a ...interface{}) {
+func Warn(format string, a ...any) {
 	if log != nil {
 		log.Warn(format, a...)
 	}
 }
 
 // Error logs a error statement
-func Error(format string, a ...interface{}) {
+func Error(format string, a ...any) {
 	if log != nil {
 		log.Error(format, a...)
 	}
 }
 
 // Fatal logs a fatal statement
-func Fatal(format string, a ...interface{}) {
+func Fatal(format string, a ...any) {
 	if log != nil {
 		log.Fatal(format, a...)
 	}

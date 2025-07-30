@@ -3,11 +3,15 @@ package updater
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"os"
 	"strings"
 	"time"
+
+	"route53-ddns/internal/helper"
+	"route53-ddns/internal/logger"
+	"route53-ddns/internal/model"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -16,9 +20,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/route53"
 	externalip "github.com/glendc/go-external-ip"
 	"github.com/gregdel/pushover"
-	"github.com/jc21/route53-ddns/pkg/helper"
-	"github.com/jc21/route53-ddns/pkg/logger"
-	"github.com/jc21/route53-ddns/pkg/model"
 )
 
 const defaultStateFile = "~/.aws/route53-ddns-state.json"
@@ -45,6 +46,7 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 
 	if awsConfig.Protocols == "IPv4 Only" || awsConfig.Protocols == "Both" || awsConfig.Protocols == "" {
 		// Determine IPv4
+		// nolint: errcheck, gosec
 		consensus.UseIPProtocol(4)
 		ipv4, errv4 := consensus.ExternalIP()
 		if errv4 == nil {
@@ -52,16 +54,18 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 		}
 
 		if errv4 != nil {
-			logger.Error(errv4.Error())
+			logger.Error("%s", errv4.Error())
 			hasError = true
 		} else if changed {
 			state.LastIPv4 = ipv4.String()
+			// nolint: errcheck, gosec
 			state.Write(getRoute53StateFilename(argConfig))
 		}
 	}
 
 	if awsConfig.Protocols == "IPv6 Only" || awsConfig.Protocols == "Both" {
 		// Determine IPv6
+		// nolint: errcheck, gosec
 		consensus.UseIPProtocol(6)
 		ipv6, errv6 := consensus.ExternalIP()
 		if errv6 == nil {
@@ -69,10 +73,11 @@ func Process(argConfig model.ArgConfig, awsConfig model.AWSConfig) {
 		}
 
 		if errv6 != nil {
-			logger.Error(errv6.Error())
+			logger.Error("%s", errv6.Error())
 			hasError = true
 		} else if changed {
 			state.LastIPv6 = ipv6.String()
+			// nolint: errcheck, gosec
 			state.Write(getRoute53StateFilename(argConfig))
 		}
 	}
@@ -98,46 +103,45 @@ func updateIPProtocol(ip net.IP, lastIP string, argConfig model.ArgConfig, awsCo
 		if updateErr != nil {
 			logger.Error("Could not update Route53: %v", updateErr.Error())
 			return false, updateErr
-		} else {
-			logger.Info("'%s' record has been updated to %v for %v", recordType, ip.String(), awsConfig.Recordset)
+		}
 
-			if awsConfig.PushoverUserToken != "" {
-				pushoverApp := pushover.New("a4dhut1a7waegz6p2xh7enzegjedgo")
-				recipient := pushover.NewRecipient(awsConfig.PushoverUserToken)
+		logger.Info("'%s' record has been updated to %v for %v", recordType, ip.String(), awsConfig.Recordset)
 
-				message := &pushover.Message{
-					Message:    fmt.Sprintf("For %v", awsConfig.Recordset),
-					Title:      fmt.Sprintf("IP updated to %v", ip.String()),
-					Priority:   0,
-					URL:        "",
-					URLTitle:   "",
-					Timestamp:  time.Now().Unix(),
-					Retry:      60 * time.Second,
-					Expire:     time.Hour,
-					DeviceName: "",
-					Sound:      "",
-				}
+		if awsConfig.PushoverUserToken != "" {
+			pushoverApp := pushover.New("a4dhut1a7waegz6p2xh7enzegjedgo")
+			recipient := pushover.NewRecipient(awsConfig.PushoverUserToken)
 
-				// Send the message to the recipient
-				_, err := pushoverApp.SendMessage(message, recipient)
-				if err != nil {
-					logger.Error(err.Error())
-				} else {
-					logger.Info("Pushover Notification Sent OK")
-				}
+			message := &pushover.Message{
+				Message:    fmt.Sprintf("For %v", awsConfig.Recordset),
+				Title:      fmt.Sprintf("IP updated to %v", ip.String()),
+				Priority:   0,
+				URL:        "",
+				URLTitle:   "",
+				Timestamp:  time.Now().Unix(),
+				Retry:      60 * time.Second,
+				Expire:     time.Hour,
+				DeviceName: "",
+				Sound:      "",
 			}
 
-			return true, nil
+			// Send the message to the recipient
+			_, err := pushoverApp.SendMessage(message, recipient)
+			if err != nil {
+				logger.Error("%s", err.Error())
+			} else {
+				logger.Info("Pushover Notification Sent OK")
+			}
 		}
-	} else {
-		logger.Info("IP %v hasn't changed, not updating Route53", ip.String())
+		return true, nil
 	}
+
+	logger.Info("IP %v hasn't changed, not updating Route53", ip.String())
 
 	return false, nil
 }
 
 func updateIP(awsConfig model.AWSConfig, ip, recordType string) error {
-	session, sessionErr := session.NewSession(&aws.Config{
+	sess, sessionErr := session.NewSession(&aws.Config{
 		Credentials: credentials.NewStaticCredentials(awsConfig.AWSKeyID, awsConfig.AWSKeySecret, ""),
 	})
 
@@ -145,7 +149,7 @@ func updateIP(awsConfig model.AWSConfig, ip, recordType string) error {
 		return sessionErr
 	}
 
-	svc := route53.New(session)
+	svc := route53.New(sess)
 
 	// Create a message
 	input := &route53.ChangeResourceRecordSetsInput{
@@ -175,9 +179,8 @@ func updateIP(awsConfig model.AWSConfig, ip, recordType string) error {
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			return aerr
-		} else {
-			return err
 		}
+		return err
 	}
 
 	logger.Trace("AWS Result: %v", result)
@@ -198,12 +201,17 @@ func GetRoute53State(argConfig model.ArgConfig) model.Route53State {
 	var state model.Route53State
 	filename := getRoute53StateFilename(argConfig)
 
+	// nolint: gosec
 	jsonFile, err := os.Open(filename)
 	if err == nil {
+		// nolint: errcheck
 		defer jsonFile.Close()
-		contents, readErr := ioutil.ReadAll(jsonFile)
+		contents, readErr := io.ReadAll(jsonFile)
 		if readErr == nil {
-			json.Unmarshal(contents, &state)
+			err := json.Unmarshal(contents, &state)
+			if err != nil {
+				logger.Error("State file looks damaged, run again with -s")
+			}
 		}
 	}
 

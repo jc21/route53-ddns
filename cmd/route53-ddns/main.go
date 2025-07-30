@@ -1,21 +1,21 @@
 package main
 
 import (
-	"github.com/jc21/route53-ddns/pkg/config"
-	"github.com/jc21/route53-ddns/pkg/logger"
-	"github.com/jc21/route53-ddns/pkg/updater"
+	"route53-ddns/internal/config"
+	"route53-ddns/internal/logger"
+	"route53-ddns/internal/updater"
 )
 
 func main() {
 	argConfig := config.GetConfig()
-	logger := logger.Init(argConfig)
-	logger.Trace("Args: %+v", argConfig)
+	log := logger.Init(argConfig)
+	log.Trace("Args: %+v", argConfig)
 
 	if argConfig.Setup {
 		config.SetupAWSConfig()
 	}
 
 	awsConfig := config.GetAWSConfig()
-	logger.Trace("AWSConfig: %+v", awsConfig)
+	log.Trace("AWSConfig: %+v", awsConfig)
 	updater.Process(argConfig, awsConfig)
 }

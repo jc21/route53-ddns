@@ -2,7 +2,6 @@ package model
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path"
 )
@@ -22,12 +21,13 @@ func (c *AWSConfig) Write(filename string) error {
 
 	// Make sure the ".aws" folder exists
 	folder := path.Dir(filename)
+	// nolint: gosec
 	dirErr := os.MkdirAll(folder, os.ModePerm)
 	if dirErr != nil {
 		return dirErr
 	}
 
-	err := ioutil.WriteFile(filename, content, 0600)
+	err := os.WriteFile(filename, content, 0600)
 	if err != nil {
 		return err
 	}

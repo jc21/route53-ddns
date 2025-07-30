@@ -4,14 +4,14 @@ import (
 	"os/user"
 	"strings"
 
-	"github.com/jc21/route53-ddns/pkg/logger"
+	"route53-ddns/internal/logger"
 )
 
 // GetFullFilename replaces wildcards in filenames
 func GetFullFilename(filename string) string {
 	usr, err := user.Current()
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Error("%s", err.Error())
 	}
 
 	var strs []string

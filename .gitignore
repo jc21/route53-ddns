@@ -4,3 +4,4 @@ bin/
 ._*
 *.swp
 *.code-workspace
+test-results/
